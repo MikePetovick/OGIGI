@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MnemoniQR - Secure Seed Encryption</title>
+    
+    <!-- PWA Essentials -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00cc99">
+    
+    <!-- Favicons -->
+    <link rel="icon" href="/assets/favicon.ico" sizes="any">
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="preload" href="script.js" as="script">
+    
+    <!-- External resources -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <img src="MQR_logo.png" alt="MnemoniQR Logo" class="logo-icon">
+        </div>
+        
+        <p class="tagline">
+            Protect your cryptocurrency seeds with AES-256-GCM + HMAC-SHA256 encryption
+        </p>
+        
+        <div class="action-buttons">
+            <button id="start-btn" class="btn-primary">
+                <i class="fas fa-lock"></i> Encrypt Seed
+            </button>
+        </div>
+        
+        <div class="decrypt-section">
+            <h3 class="decrypt-title">
+                <i class="fas fa-unlock"></i> Decrypt Seed
+            </h3>
+            
+            <div class="decrypt-options">
+                <button id="scan-btn" class="btn-primary btn-scan">
+                    <i class="fas fa-camera"></i> Scan QR Code
+                </button>
+                
+                <div class="or-divider">
+                    <span>or</span>
+                </div>
+            </div>
+            
+            <div class="drop-area" id="drop-area">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Drag and drop your QR code here</p>
+                <p class="small">Or click to select an image</p>
+                <input type="file" id="qr-file" accept="image/*" style="display: none;">
+            </div>
+            
+            <button id="decrypt-btn" class="btn-primary" style="display: none; margin-top: 15px;">
+                <i class="fas fa-key"></i> Decrypt Seed
+            </button>
+        </div>
+    </div>
+    
+    <!-- Seed Encryption Modal -->
+    <div id="seed-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Encrypt Seed Phrase</h2>
+                <p class="modal-subtitle">Enter 12, 18, or 24 words separated by spaces</p>
+                <div class="close-modal">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label class="input-label" for="seed-phrase">
+                    Recovery Phrase
+                    <span>Maximum 24 words</span>
+                </label>
+                <div class="seed-input-container">
+                    <textarea id="seed-phrase" placeholder="Enter each word separated by a space..."></textarea>
+                    <div class="word-counter" id="word-counter">0 words</div>
+                    <button class="toggle-visibility" id="toggle-visibility">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <div id="bip39-suggestions" class="bip39-suggestions"></div>
+                </div>
+                
+                <div class="word-hints">
+                    <div class="word-hint">
+                        <i class="fas fa-check-circle"></i> 12 words
+                    </div>
+                    <div class="word-hint">
+                        <i class="fas fa-check-circle"></i> 18 words
+                    </div>
+                    <div class="word-hint">
+                        <i class="fas fa-check-circle"></i> 24 words
+                    </div>
+                </div>
+            </div>
+            
+            <!-- User Message Section -->
+            <div class="user-message-section">
+                <div class="input-group">
+                    <label class="input-label" for="user-message">
+                        User Message (Optional)
+                        <span>Add notes about this seed phrase</span>
+                    </label>
+                    <input type="text" id="user-message" class="password-input" 
+                           placeholder="e.g., My main wallet backup BITCOIN, ETH..." maxlength="255">
+                    <div class="message-counter">
+                        <span id="message-chars">0</span>/255 characters
+                    </div>
+                </div>
+                
+                <div class="security-note warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Note:</strong> This message will be stored in the QR code metadata. 
+                    Use it to remember details about this seed phrase.
+                </div>
+            </div>
+            
+            <div class="password-section" id="password-section">
+                <div class="input-group">
+                    <label class="input-label" for="password">
+                        Encryption Password
+                        <span>Minimum 12 characters</span>
+                    </label>
+                    <div class="password-input-container">
+                        <input type="password" id="password" class="password-input" placeholder="Create a strong password">
+                        <button class="password-toggle" id="password-toggle">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="password-strength">
+                        <div class="password-strength-bar" id="password-strength-bar"></div>
+                    </div>
+                    <div class="password-strength-text" id="password-strength-text">Security: Very weak</div>
+                    
+                    <div class="generate-password-btn" id="generate-password">
+                        <i class="fas fa-dice"></i> Generate secure password
+                    </div>
+                </div>
+            </div>
+            
+            <div class="actions">
+                <button class="btn-secondary" id="cancel-btn">Cancel</button>
+                <button class="btn-primary" id="encrypt-btn">Encrypt Seed</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Password Input Modal -->
+    <div id="password-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Decrypt Seed Phrase</h2>
+                <p class="modal-subtitle">Enter password to decrypt QR code</p>
+                <div class="close-modal" id="close-password-modal">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+            
+            <div class="password-section">
+                <div class="input-group">
+                    <label class="input-label" for="decrypt-password">
+                        Encryption Password
+                    </label>
+                    <div class="password-input-container">
+                        <input type="password" id="decrypt-password" class="password-input" placeholder="Enter your password">
+                        <button class="password-toggle" id="decrypt-password-toggle">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="actions">
+                <button class="btn-secondary" id="cancel-decrypt-btn">Cancel</button>
+                <button class="btn-primary" id="decrypt-seed-btn">Decrypt Seed</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Decrypted Seed Modal -->
+    <div id="decrypted-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-shield-check" style="color: var(--success-color);"></i>
+                    Seed Successfully Decrypted
+                </h2>
+                <p class="modal-subtitle">HMAC verification passed - Data integrity confirmed</p>
+                <div class="close-modal" id="close-decrypted">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+            
+            <!-- Integrity Badge -->
+            <div class="integrity-badge">
+                <i class="fas fa-fingerprint"></i>
+                HMAC-SHA256 Verified
+            </div>
+            
+            <!-- Metadata Section -->
+            <div class="metadata-section">
+                <h4 style="margin-bottom: 1rem; color: var(--accent-color);">
+                    <i class="fas fa-info-circle"></i> QR Metadata
+                </h4>
+                
+                <div class="metadata-grid">
+                    <div class="metadata-item">
+                        <strong>Format Version:</strong>
+                        <span id="metadata-version">1</span>
+                    </div>
+                    <div class="metadata-item">
+                        <strong>Created:</strong>
+                        <span id="metadata-created">Loading...</span>
+                    </div>
+                    <div class="metadata-item">
+                        <strong>Modifications:</strong>
+                        <span id="metadata-modifications">0</span>
+                    </div>
+                    <div class="metadata-item" style="display: none;">
+                        <strong>Failed Attempts:</strong>
+                        <span id="metadata-failed-attempts">0</span>
+                    </div>
+                    <div class="metadata-item" style="display: none;">
+                        <strong>Last Failed Attempt:</strong>
+                        <span id="metadata-last-attempt">Never</span>
+                    </div>
+                    <div class="user-message-content" id="user-message-container" style="display: none;">
+                        <strong>User Message:</strong>
+                        <p id="metadata-user-message" style="margin-top: 0.5rem;"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label class="input-label">
+                    Recovery Phrase
+                    <span id="word-count">0 words</span>
+                </label>
+                <div class="seed-input-container">
+                    <textarea id="decrypted-seed" class="password-input" readonly style="min-height: 100px;"></textarea>
+                    <button class="toggle-visibility" id="copy-seed">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <div class="seed-words" id="seed-words-container">
+                    <!-- Words will be generated dynamically -->
+                </div>
+            </div>
+            
+            <div class="security-note success">
+                <i class="fas fa-shield-check"></i>
+                <strong>Integrity Verified:</strong> HMAC-SHA256 confirms data hasn't been tampered with 
+                and is authentic. Your seed phrase is secure.
+            </div>
+            
+            <div class="actions">
+                <button class="btn-primary" id="close-decrypted-btn">Close</button>
+                <button class="btn-secondary" id="update-qr-btn" style="display: none;">
+                    <i class="fas fa-sync-alt"></i> Update QR
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Welcome Modal -->
+    <div id="welcome-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Welcome to MnemoniQR</h2>
+                <div class="close-modal" id="close-welcome">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <div class="security-note" style="margin-bottom: 1rem;">
+                    <i class="fas fa-shield-alt"></i>
+                    <strong>100% Client-Side Processing:</strong> 
+                    <p>All information is processed exclusively on your device.</p>
+                </div>
+                
+                <div class="security-note" style="margin-bottom: 1rem;">
+                    <i class="fas fa-lock"></i>
+                    <strong>Maximum Security:</strong> 
+                    <p>Your seed phrases and passwords <u>never leave your browser</u>.</p>
+                </div>
+                
+                <div class="security-note" style="margin-bottom: 1rem;">
+                    <i class="fas fa-fingerprint"></i>
+                    <strong>HMAC Integrity Protection:</strong> 
+                    <p>All encrypted data includes HMAC-SHA256 signatures to detect tampering.</p>
+                </div>
+                
+                <div class="security-note" style="margin-bottom: 1rem;">
+                    <i class="fas fa-history"></i>
+                    <strong>Security Tracking:</strong> 
+                    <p>QR codes track modification history and failed decryption attempts for security monitoring.</p>
+                </div>
+                
+                <div class="security-note" style="margin-bottom: 1rem;">
+                    <i class="fas fa-bolt"></i>
+                    <strong>No Server Dependency:</strong> 
+                    <p>The app works completely offline once loaded.</p>
+                </div>
+                
+                <div class="security-note" style="background: rgba(255, 193, 7, 0.1); border-left-color: #ffc107;">
+                    <i class="fas fa-wifi-slash"></i>
+                    <strong>Security Recommendation:</strong>
+                    <p>For maximum protection, use this app in <strong>offline mode</strong>:</p>
+                    <ol style="padding-left: 1.5rem; margin-top: 0.5rem;">
+                        <li>Load the page while connected to internet</li>
+                        <li>Disconnect from internet</li>
+                        <li>Reload the page (Ctrl + F5) to load from cache</li>
+                        <li>Or save the complete page (File → Save as)</li>
+                    </ol>
+                    <p style="margin-top: 0.5rem;">This guarantees no sensitive data can be transmitted over the internet!</p>
+                </div>
+            </div>
+            
+            <div class="actions">
+                <button class="btn-primary" id="accept-welcome">Get Started</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- QR Result Modal -->
+    <div id="qr-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Encrypted Seed QR</h2>
+                <p class="modal-subtitle">Store this QR code securely</p>
+                <div class="close-modal" id="close-qr-modal">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+            
+            <div id="qr-container">
+                <div class="qr-wrapper">
+                    <div class="hushbox-compatible">
+                        <i class="fas fa-shield-alt"></i> HUSHBOX Compatible
+                    </div>
+                    <canvas id="qr-canvas"></canvas>
+                </div>
+                
+                <!-- Security Verification Section -->
+                <div class="security-verification">
+                    <h4 style="margin-bottom: 1rem; color: var(--accent-color);">
+                        <i class="fas fa-shield-check"></i> Security Verification
+                    </h4>
+                    
+                    <div class="verification-steps">
+                        <div class="verification-step verified">
+                            <i class="fas fa-check-circle"></i>
+                            <span>AES-256-GCM Encryption</span>
+                        </div>
+                        <div class="verification-step verified">
+                            <i class="fas fa-check-circle"></i>
+                            <span>HMAC-SHA256 Integrity Protection</span>
+                        </div>
+                        <div class="verification-step verified">
+                            <i class="fas fa-check-circle"></i>
+                            <span>PBKDF2 Key Derivation (310,000 iterations)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="hmac-info">
+                        <div class="info-item">
+                            <strong>HMAC Function:</strong> SHA-256
+                        </div>
+                        <div class="info-item">
+                            <strong>Key Size:</strong> 256-bit
+                        </div>
+                        <div class="info-item">
+                            <strong>Purpose:</strong> Tamper detection & authentication
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="qr-actions">
+                    <button id="share-btn" class="btn-primary">
+                        <i class="fas fa-share-alt"></i> Share
+                    </button>
+                    <button id="download-btn" class="btn-secondary">
+                        <i class="fas fa-download"></i> Download PNG
+                    </button>
+                    <button id="pdf-btn" class="btn-secondary">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </button>
+                </div>
+                
+                <div class="security-note">
+                    <i class="fas fa-shield-alt"></i>
+                    <strong>HMAC Protection:</strong> QR contains HMAC-SHA256 signature that verifies 
+                    data integrity during decryption. Any tampering will be detected.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scanner Modal -->
+    <div id="scanner-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Scan QR Code</h2>
+                <p class="modal-subtitle">Point your camera at the QR code</p>
+                <div class="close-modal" id="close-scanner">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+            
+            <div class="scanner-container">
+                <video id="camera-stream" autoplay playsinline muted></video>
+                
+                <!-- Enhanced Scanner Overlay -->
+                <div class="scanner-overlay">
+                    <div class="scanner-frame">
+                        <div class="scanner-corner corner-tl"></div>
+                        <div class="scanner-corner corner-tr"></div>
+                        <div class="scanner-corner corner-bl"></div>
+                        <div class="scanner-corner corner-br"></div>
+                        <div class="scanner-guide"></div>
+                    </div>
+                    <div class="scanner-stats" id="scanner-stats">
+                        FPS: <span id="fps-counter">0</span> | 
+                        Frames: <span id="frame-counter">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="scanner-performance">
+                <div class="performance-indicator performance-good">
+                    <i class="fas fa-bolt"></i>
+                    <span>High Performance Mode</span>
+                </div>
+            </div>
+            
+            <div class="scanner-actions">
+                <button id="stop-scan-btn" class="btn-secondary">
+                    <i class="fas fa-stop"></i> Stop Scanner
+                </button>
+            </div>
+            
+            <div class="security-note">
+                <i class="fas fa-info-circle"></i>
+                The camera feed is processed locally and never leaves your device.
+                Advanced algorithms ensure fast and accurate QR detection.
+            </div>
+        </div>
+    </div>
+    
+    <div id="toast-container"></div>
+    
+    <!-- Spinner overlay -->
+    <div id="spinner-overlay" class="spinner-overlay">
+        <div class="spinner"></div>
+        <p>Processing... Please wait</p>
+    </div>
+    
+    <footer>
+        <p>MnemoniQR &copy; 2023 | Secure seed encryption for cryptocurrencies</p>
+        <p>No data leaves your device. All processing occurs locally.</p>
+    </footer>
+    
+    <script src="script.js"></script>
+    
+    <!-- PWA Installation Handler -->
+    <script>
+    // Registrar Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('ServiceWorker registrado con éxito: ', registration.scope);
+          })
+          .catch(error => {
+            console.log('Error al registrar ServiceWorker: ', error);
+          });
+      });
+    }
+
+    // Manejar la instalación PWA
+    let deferredPrompt;
+    const installButton = document.createElement('button');
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      
+      // Crear botón de instalación
+      installButton.textContent = 'Install App';
+      installButton.className = 'btn-primary';
+      installButton.style.marginTop = '1rem';
+      installButton.style.marginBottom = '1rem';
+      installButton.id = 'install-button';
+      
+      // Agregar botón al contenedor principal
+      document.querySelector('.container').appendChild(installButton);
+      
+      // Evento para instalar
+      installButton.addEventListener('click', () => {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(choiceResult => {
+          if (choiceResult.outcome === 'accepted') {
+            console.log('Usuario aceptó instalar la PWA');
+          } else {
+            console.log('Usuario rechazó instalar la PWA');
+          }
+          installButton.remove();
+          deferredPrompt = null;
+        });
+      });
+    });
+
+    // Detectar cuando la app está instalada
+    window.addEventListener('appinstalled', () => {
+      console.log('Aplicación instalada con éxito');
+      if (installButton) installButton.remove();
+    });
+    </script>
+</body>
+</html>

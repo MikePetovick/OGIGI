@@ -1,0 +1,32 @@
+{
+  "name": "MnemoniQR",
+  "short_name": "MnemoniQR",
+  "description": "Secure Seed Encryption - Client-Side & Offline",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#00cc99",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/assets/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/web-app-manifest-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png"
+    }
+  ],
+  "features": ["Offline", "Fast", "Secure"],
+  "permissions": ["camera"]
+}
